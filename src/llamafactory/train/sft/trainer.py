@@ -82,11 +82,12 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
         return super().create_scheduler(num_training_steps, optimizer)
 
     @override
-    def _get_train_sampler(self) -> Optional["torch.utils.data.Sampler"]:
+    def _get_train_sampler(self, train_dataset: Optional["Dataset"] = None) -> Optional["torch.utils.data.Sampler"]:
         if self.finetuning_args.disable_shuffling:
-            return torch.utils.data.SequentialSampler(self.train_dataset)
+            dataset = train_dataset if train_dataset is not None else self.train_dataset
+            return torch.utils.data.SequentialSampler(dataset)
 
-        return super()._get_train_sampler()
+        return super()._get_train_sampler(train_dataset)
 
     @override
     def prediction_step(

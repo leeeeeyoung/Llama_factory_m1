@@ -21,11 +21,19 @@ from typing import TYPE_CHECKING, Dict, Optional
 
 import numpy as np
 import torch
-from transformers.utils import is_jieba_available, is_nltk_available
+from transformers.utils import is_nltk_available
 
 from ...extras.constants import IGNORE_INDEX
 from ...extras.misc import numpify
 from ...extras.packages import is_rouge_available
+
+
+def is_jieba_available() -> bool:
+    try:
+        import jieba  # noqa: F401
+        return True
+    except ImportError:
+        return False
 
 
 if TYPE_CHECKING:

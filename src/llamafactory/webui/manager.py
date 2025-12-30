@@ -77,6 +77,7 @@ class Manager:
             self._id_to_elem["top.quantization_bit"],
             self._id_to_elem["top.quantization_method"],
             self._id_to_elem["top.template"],
+            self._id_to_elem["top.custom_template_path"],
             self._id_to_elem["top.rope_scaling"],
             self._id_to_elem["top.booster"],
         }

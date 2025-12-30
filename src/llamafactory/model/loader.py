@@ -114,7 +114,47 @@ def load_config(model_args: "ModelArguments") -> "PretrainedConfig":
     Loads model config.
     """
     init_kwargs = _get_init_kwargs(model_args)
-    return AutoConfig.from_pretrained(model_args.model_name_or_path, **init_kwargs)
+    try:
+        return AutoConfig.from_pretrained(model_args.model_name_or_path, **init_kwargs)
+    except ValueError as e:
+        # Handle custom model types that are not registered in transformers
+        if "does not recognize this architecture" in str(e):
+            logger.warning(
+                f"Model type not recognized by transformers. "
+                f"Attempting to load config with trust_remote_code=True and auto_map fallback."
+            )
+            # Try to load the config file directly and inspect it
+            import json
+            from pathlib import Path
+            
+            config_path = Path(model_args.model_name_or_path) / "config.json"
+            if not config_path.exists():
+                # If local path doesn't exist, try to download
+                from transformers.utils import cached_file
+                config_file = cached_file(
+                    model_args.model_name_or_path,
+                    "config.json",
+                    cache_dir=model_args.cache_dir,
+                    token=model_args.hf_hub_token,
+                )
+                config_path = Path(config_file)
+            
+            with open(config_path, "r") as f:
+                config_dict = json.load(f)
+            
+            model_type = config_dict.get("model_type")
+            logger.error(
+                f"Model type '{model_type}' is not supported by transformers. "
+                f"This model requires custom code that is not available in the model repository. "
+                f"Please check if:\n"
+                f"1. The model repository has modeling files (modeling_*.py)\n"
+                f"2. You're using the correct model identifier\n"
+                f"3. The model is compatible with your transformers version\n\n"
+                f"Original error: {str(e)}"
+            )
+            raise
+        else:
+            raise
 
 
 def load_model(

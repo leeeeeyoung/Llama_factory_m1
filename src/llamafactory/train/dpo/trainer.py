@@ -35,6 +35,7 @@ from ..trainer_utils import create_custom_optimizer, create_custom_scheduler, ge
 
 
 if TYPE_CHECKING:
+    from torch.utils.data import Dataset
     from transformers import PreTrainedModel, ProcessorMixin
 
     from ...hparams import FinetuningArguments
@@ -121,11 +122,12 @@ class CustomDPOTrainer(DPOTrainer):
         return super().create_scheduler(num_training_steps, optimizer)
 
     @override
-    def _get_train_sampler(self) -> Optional["torch.utils.data.Sampler"]:
+    def _get_train_sampler(self, train_dataset: Optional["Dataset"] = None) -> Optional["torch.utils.data.Sampler"]:
         if self.finetuning_args.disable_shuffling:
-            return torch.utils.data.SequentialSampler(self.train_dataset)
+            dataset = train_dataset if train_dataset is not None else self.train_dataset
+            return torch.utils.data.SequentialSampler(dataset)
 
-        return super()._get_train_sampler()
+        return super()._get_train_sampler(train_dataset)
 
     @override
     def get_batch_samples(self, epoch_iterator, num_batches):

@@ -108,6 +108,7 @@ class WebChatModel(ChatModel):
             cache_dir=user_config.get("cache_dir", None),
             finetuning_type=finetuning_type,
             template=get("top.template"),
+            custom_template_path=get("top.custom_template_path") if get("top.custom_template_path") else None,
             rope_scaling=get("top.rope_scaling") if get("top.rope_scaling") != "none" else None,
             flash_attn="fa2" if get("top.booster") == "flashattn2" else "auto",
             use_unsloth=(get("top.booster") == "unsloth"),

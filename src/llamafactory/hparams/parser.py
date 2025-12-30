@@ -221,7 +221,7 @@ def get_train_args(args: Optional[Union[Dict[str, Any], List[str]]] = None) -> _
         if training_args.report_to and training_args.report_to[0] not in ["wandb", "tensorboard"]:
             raise ValueError("PPO only accepts wandb or tensorboard logger.")
 
-    if training_args.parallel_mode == ParallelMode.NOT_DISTRIBUTED:
+    if training_args.parallel_mode == ParallelMode.NOT_DISTRIBUTED and not is_env_enabled("DISABLE_TORCHRUN"):
         raise ValueError("Please launch distributed training with `llamafactory-cli` or `torchrun`.")
 
     if training_args.deepspeed and training_args.parallel_mode != ParallelMode.DISTRIBUTED:
@@ -374,7 +374,12 @@ def get_train_args(args: Optional[Union[Dict[str, Any], List[str]]] = None) -> _
     elif training_args.fp16:
         model_args.compute_dtype = torch.float16
 
-    model_args.device_map = {"": get_current_device()}
+    # Check if running in single process mode (no DDP)
+    if training_args.parallel_mode != ParallelMode.DISTRIBUTED:
+        # For single GPU training, allow device_map="auto" for large models
+        model_args.device_map = "auto"
+    else:
+        model_args.device_map = {"": get_current_device()}
     model_args.model_max_length = data_args.cutoff_len
     model_args.block_diag_attn = data_args.neat_packing
     data_args.packing = data_args.packing if data_args.packing is not None else finetuning_args.stage == "pt"

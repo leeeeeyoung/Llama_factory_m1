@@ -532,7 +532,16 @@ def get_template_and_fix_tokenizer(tokenizer: "PreTrainedTokenizer", data_args: 
     r"""
     Gets chat template and fixes the tokenizer.
     """
-    if data_args.template is None:
+    # Check if custom_template_path is provided (takes precedence over template)
+    if getattr(data_args, "custom_template_path", None) is not None:
+        logger.info_rank0(f"Loading custom chat template from: {data_args.custom_template_path}")
+        with open(data_args.custom_template_path, "r", encoding="utf-8") as f:
+            custom_jinja_template = f.read()
+        # Set the custom template to the tokenizer
+        tokenizer.chat_template = custom_jinja_template
+        # Parse the template from the tokenizer to create a Template object
+        template = parse_template(tokenizer)
+    elif data_args.template is None:
         if isinstance(tokenizer.chat_template, str):
             logger.warning_rank0("`template` was not specified, try parsing the chat template from the tokenizer.")
             template = parse_template(tokenizer)

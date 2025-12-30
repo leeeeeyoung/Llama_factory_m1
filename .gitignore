@@ -175,3 +175,12 @@ swanlog/
 generated_predictions.jsonl
 
 # my .gitignore
+.github/copilot-instructions.md
+
+chat_template.jinja
+gpt_oss_lora_sft.yaml
+infer.yaml
+
+tool_chat_template_llama3.1_json.jinja
+llama3_lora_sft.yaml
+llama3_infer.yaml

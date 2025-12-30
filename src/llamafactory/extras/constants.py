@@ -656,6 +656,15 @@ register_model_group(
 
 register_model_group(
     models={
+        "GPT-OSS-20B": {
+            DownloadSource.DEFAULT: "openai/gpt-oss-20b",
+        },
+    },
+)
+
+
+register_model_group(
+    models={
         "GPT-2-Small": {
             DownloadSource.DEFAULT: "openai-community/gpt2",
             DownloadSource.MODELSCOPE: "AI-ModelScope/gpt2",

@@ -44,6 +44,7 @@ def create_top() -> Dict[str, "Component"]:
         quantization_bit = gr.Dropdown(choices=["none", "8", "4"], value="none", allow_custom_value=True)
         quantization_method = gr.Dropdown(choices=["bitsandbytes", "hqq", "eetq"], value="bitsandbytes")
         template = gr.Dropdown(choices=list(TEMPLATES.keys()), value="default")
+        custom_template_path = gr.Textbox(value="", interactive=True)
         rope_scaling = gr.Dropdown(choices=["none", "linear", "dynamic", "yarn", "llama3"], value="none")
         booster = gr.Dropdown(choices=["auto", "flashattn2", "unsloth", "liger_kernel"], value="auto")
 
@@ -67,6 +68,7 @@ def create_top() -> Dict[str, "Component"]:
         quantization_bit=quantization_bit,
         quantization_method=quantization_method,
         template=template,
+        custom_template_path=custom_template_path,
         rope_scaling=rope_scaling,
         booster=booster,
     )

@@ -174,6 +174,28 @@ LOCALES = {
             "info": "プロンプトの構築に使用されるチャットテンプレート。",
         },
     },
+    "custom_template_path": {
+        "en": {
+            "label": "Custom template path",
+            "info": "Path to a custom Jinja chat template file (.jinja). Takes precedence over chat template.",
+        },
+        "ru": {
+            "label": "Путь к пользовательскому шаблону",
+            "info": "Путь к пользовательскому файлу шаблона Jinja (.jinja). Имеет приоритет над шаблоном чата.",
+        },
+        "zh": {
+            "label": "自定义模板路径",
+            "info": "自定义 Jinja 聊天模板文件 (.jinja) 的路径。优先于对话模板使用。",
+        },
+        "ko": {
+            "label": "사용자 정의 템플릿 경로",
+            "info": "사용자 정의 Jinja 채팅 템플릿 파일 (.jinja) 경로. 채팅 템플릿보다 우선합니다.",
+        },
+        "ja": {
+            "label": "カスタムテンプレートパス",
+            "info": "カスタム Jinja チャットテンプレートファイル (.jinja) へのパス。チャットテンプレートより優先されます。",
+        },
+    },
     "rope_scaling": {
         "en": {
             "label": "RoPE scaling",

@@ -29,6 +29,10 @@ class DataArguments:
         default=None,
         metadata={"help": "Which template to use for constructing prompts in training and inference."},
     )
+    custom_template_path: Optional[str] = field(
+        default=None,
+        metadata={"help": "Path to a custom Jinja chat template file (.jinja). Takes precedence over `template`."},
+    )
     dataset: Optional[str] = field(
         default=None,
         metadata={"help": "The name of dataset(s) to use for training. Use commas to separate multiple datasets."},
@@ -161,6 +165,11 @@ class DataArguments:
 
         if self.mask_history and self.train_on_prompt:
             raise ValueError("`mask_history` is incompatible with `train_on_prompt`.")
+
+        if self.custom_template_path is not None:
+            import os
+            if not os.path.isfile(self.custom_template_path):
+                raise ValueError(f"Custom template file not found: {self.custom_template_path}")
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
