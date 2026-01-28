@@ -184,3 +184,14 @@ infer.yaml
 tool_chat_template_llama3.1_json.jinja
 llama3_lora_sft.yaml
 llama3_infer.yaml
+
+tool_chat_template_mistral.jinja
+mistral_small_lora_sft.yaml
+mistral_small_infer.yaml
+
+harmony_chat_api.py
+harmony_chat.py
+python_executor_mcp_server.py
+web_scraper_mcp_server_http.py
+terminal_chat.py
+basic_tool_calling.ipynb

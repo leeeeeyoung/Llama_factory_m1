@@ -29,6 +29,7 @@ class FunctionCall(NamedTuple):
 
 DEFAULT_TOOL_PROMPT = (
     "You have access to the following tools:\n{tool_text}"
+    "You may call one or more tools in a single response when needed.\n"
     "Use the following format if using a tool:\n"
     "```\n"
     "Action: tool name (one of [{tool_names}])\n"
@@ -56,6 +57,127 @@ QWEN_TOOL_PROMPT = (
     """<tool_call></tool_call> XML tags:\n<tool_call>\n{{"name": <function-name>, """
     """"arguments": <args-json-object>}}\n</tool_call>"""
 )
+
+
+GPT_OSS_TOOL_PROMPT = (
+    "You have access to the following tools:\n{tool_text}\n\n"
+    "Tool calling rules:\n"
+    "- If you need to call tools, respond with JSON only (no markdown/code fences).\n"
+    "- You may call multiple tools in a single response.\n"
+    "- Use the following OpenAI-compatible JSON format:\n"
+    '  {{"tool_calls": [{{"type": "function", "function": {{"name": "tool_name", "arguments": {{ ... }} }} }}, ...]}}\n'
+)
+
+
+def _strip_json_fence(text: str) -> str:
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = stripped.strip("`")
+        stripped = stripped.lstrip()
+        if stripped.startswith("json"):
+            stripped = stripped[4:].lstrip()
+    return stripped.strip()
+
+
+def _coerce_tool_calls(obj: Any) -> Union[None, List["FunctionCall"]]:
+    """Coerces common tool-calling JSON shapes into a FunctionCall list."""
+
+    def normalize_args(args: Any) -> str:
+        if isinstance(args, str):
+            try:
+                parsed = json.loads(args)
+                return json.dumps(parsed, ensure_ascii=False)
+            except json.JSONDecodeError:
+                return json.dumps(args, ensure_ascii=False)
+        return json.dumps(args, ensure_ascii=False)
+
+    def normalize_call(call_obj: Any) -> Union[None, "FunctionCall"]:
+        if not isinstance(call_obj, dict):
+            return None
+
+        # OpenAI-style: {"type": "function", "function": {"name": ..., "arguments": ...}}
+        if "function" in call_obj and isinstance(call_obj["function"], dict):
+            fn = call_obj["function"]
+            if "name" not in fn or "arguments" not in fn:
+                return None
+            return FunctionCall(str(fn["name"]), normalize_args(fn["arguments"]))
+
+        # Simple: {"name": ..., "arguments": ...}
+        if "name" in call_obj and "arguments" in call_obj:
+            return FunctionCall(str(call_obj["name"]), normalize_args(call_obj["arguments"]))
+
+        return None
+
+    if isinstance(obj, dict) and "tool_calls" in obj:
+        tool_calls = obj["tool_calls"]
+        if not isinstance(tool_calls, list):
+            return None
+        calls: List[FunctionCall] = []
+        for item in tool_calls:
+            call = normalize_call(item)
+            if call is None:
+                return None
+            calls.append(call)
+        return calls
+
+    if isinstance(obj, list):
+        calls: List[FunctionCall] = []
+        for item in obj:
+            call = normalize_call(item)
+            if call is None:
+                return None
+            calls.append(call)
+        return calls
+
+    if isinstance(obj, dict):
+        call = normalize_call(obj)
+        if call is None:
+            return None
+        return [call]
+
+    return None
+
+
+def _find_tool_calls_in_text(text: str) -> Union[None, List["FunctionCall"]]:
+    """Find embedded JSON tool calls inside a larger text blob."""
+    decoder = json.JSONDecoder()
+    stripped = _strip_json_fence(text)
+
+    # Fast path: entire content is JSON.
+    try:
+        parsed = json.loads(stripped)
+        coerced = _coerce_tool_calls(parsed)
+        if coerced is not None and len(coerced):
+            return coerced
+    except json.JSONDecodeError:
+        pass
+
+    # Slow path: scan from the end for a JSON object/array that decodes cleanly.
+    # Limit scan window to keep this cheap for long generations.
+    scan = stripped[-8000:]
+    base = len(stripped) - len(scan)
+
+    best: Union[None, List[FunctionCall]] = None
+    for rel_i in range(len(scan) - 1, -1, -1):
+        ch = scan[rel_i]
+        if ch not in "[{":
+            continue
+        i = base + rel_i
+        try:
+            obj, _end = decoder.raw_decode(stripped, idx=i)
+        except json.JSONDecodeError:
+            continue
+
+        coerced = _coerce_tool_calls(obj)
+        if coerced is not None and len(coerced):
+            if best is None or len(coerced) > len(best):
+                best = coerced
+
+            # Early exit if we already found parallel calls.
+            if best is not None and len(best) > 1:
+                break
+
+    return best
 
 
 @dataclass
@@ -142,6 +264,15 @@ class DefaultToolUtils(ToolUtils):
     @override
     @staticmethod
     def tool_extractor(content: str) -> Union[str, List["FunctionCall"]]:
+        # Accept JSON tool calls (e.g. OpenAI-style `tool_calls`) in addition to the default "Action:" format.
+        try:
+            parsed = json.loads(_strip_json_fence(content))
+            coerced = _coerce_tool_calls(parsed)
+            if coerced is not None and len(coerced):
+                return coerced
+        except json.JSONDecodeError:
+            pass
+
         regex = re.compile(r"Action:\s*([a-zA-Z0-9_]+)\s*Action Input:\s*(.+?)(?=\s*Action:|\s*$)", re.DOTALL)
         action_match: List[Tuple[str, str]] = re.findall(regex, content)
         if not action_match:
@@ -158,6 +289,45 @@ class DefaultToolUtils(ToolUtils):
                 return content
 
         return results
+
+
+class GPTOssToolUtils(ToolUtils):
+    r"""GPT-OSS tool calling template.
+
+    Supports OpenAI-style `tool_calls` JSON and parallel (multi-tool) calls.
+    """
+
+    @override
+    @staticmethod
+    def tool_formatter(tools: List[Dict[str, Any]]) -> str:
+        wrapped_tools = [{"type": "function", "function": tool} for tool in tools]
+        tool_text = json.dumps(wrapped_tools, indent=2, ensure_ascii=False)
+        return GPT_OSS_TOOL_PROMPT.format(tool_text=tool_text)
+
+    @override
+    @staticmethod
+    def function_formatter(functions: List["FunctionCall"]) -> str:
+        tool_calls = []
+        for name, arguments in functions:
+            try:
+                args_obj = json.loads(arguments)
+            except json.JSONDecodeError:
+                args_obj = arguments
+
+            if isinstance(args_obj, str):
+                try:
+                    args_obj = json.loads(args_obj)
+                except json.JSONDecodeError:
+                    pass
+            tool_calls.append({"type": "function", "function": {"name": name, "arguments": args_obj}})
+
+        return json.dumps({"tool_calls": tool_calls}, ensure_ascii=False)
+
+    @override
+    @staticmethod
+    def tool_extractor(content: str) -> Union[str, List["FunctionCall"]]:
+        coerced = _find_tool_calls_in_text(content)
+        return coerced if coerced is not None else content
 
 
 class GLM4ToolUtils(ToolUtils):
@@ -338,6 +508,7 @@ TOOLS = {
     "llama3": Llama3ToolUtils(),
     "mistral": MistralToolUtils(),
     "qwen": QwenToolUtils(),
+    "gpt_oss": GPTOssToolUtils(),
 }
 
 
